@@ -1,0 +1,38 @@
+<!doctype html>
+<html lang="es">
+<head>
+  <meta charset="utf-8" />
+  <title>Mapa de Cartagena - Bahía del Pecado</title>
+  <meta name="viewport" content="width=device-width,initial-scale=1" />
+  <link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css"/>
+  <style>
+    html, body, #map { height: 100%; margin: 0; padding: 0; }
+    #map { height: 100vh; }
+    .attribution { position: absolute; right: 8px; bottom: 8px; background: rgba(255,255,255,0.9); padding: 4px 8px; border-radius: 4px; font-size: 12px; }
+  </style>
+</head>
+<body>
+  <div id="map"></div>
+  <script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js"></script>
+  <script>
+    // Coordenadas aproximadas de Cartagena de Indias, Colombia
+    const cartagena = [10.391, -75.479];
+    const map = L.map('map').setView(cartagena, 13);
+
+    L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png', {
+      maxZoom: 19,
+      attribution: '&copy; OpenStreetMap contributors'
+    }).addTo(map);
+
+    // Marcador principal
+    L.marker(cartagena).addTo(map)
+      .bindPopup('<b>Cartagena de Indias</b><br>Bahía del Pecado')
+      .openPopup();
+
+    // Ejemplo: añadir otro marcador (puedes duplicar y cambiar coords/texto)
+    // L.marker([10.423, -75.543]).addTo(map).bindPopup('Otro punto de interés');
+
+    // Si quieres, puedo añadir rutas, capas GeoJSON, o controles de búsqueda.
+  </script>
+</body>
+</html>
