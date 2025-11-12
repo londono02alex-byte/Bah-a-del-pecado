@@ -1,3 +1,412 @@
+<!doctype html>
+<html lang="es">
+<head>
+<meta charset="utf-8" />
+<meta name="viewport" content="width=device-width,initial-scale=1" />
+<title>Bahía del Pecado — Demo Jugable</title>
+<style>
+  :root{
+    --gold:#ffb400;
+    --bg:#050506;
+    --panel: rgba(8,8,10,0.75);
+    --ui: #dfe7ea;
+  }
+  html,body{height:100%;margin:0;background:var(--bg);color:#fff;font-family:Inter,Segoe UI,Roboto,Arial,sans-serif}
+  header{position:fixed;left:0;right:0;top:0;height:64px;background:linear-gradient(90deg,#020203,rgba(0,0,0,0.3));display:flex;align-items:center;justify-content:space-between;padding:8px 20px;z-index:50}
+  header h1{font-family: "Times New Roman", serif;margin:0;font-size:20px;color:var(--gold)}
+  header nav a{color:#aaa;margin-left:18px;text-decoration:none}
+  .wrap{display:flex;gap:18px;padding-top:80px;max-width:1400px;margin:0 auto}
+  .left{flex:1;padding:18px}
+  .right{width:360px;padding:18px}
+  .panel{background:var(--panel);border-radius:12px;padding:12px;box-shadow:0 6px 24px rgba(0,0,0,0.6)}
+  #gameCanvas{width:100%;height:720px;background:#111;border-radius:10px;display:block}
+  h2{color:var(--gold);margin:6px 0 12px}
+  .hint{color:#ccc;font-size:13px;margin-bottom:8px}
+  .hud{display:flex;gap:8px;flex-wrap:wrap}
+  .stat{background:rgba(255,255,255,0.03);padding:8px 10px;border-radius:8px;font-size:14px}
+  .btn{display:inline-block;background:var(--gold);color:#000;padding:8px 12px;border-radius:8px;text-decoration:none;font-weight:700;margin-top:8px}
+  footer{color:#888;text-align:center;padding:16px 0;margin-top:28px;font-size:13px}
+  /* small responsive */
+  @media (max-width:1000px){.wrap{flex-direction:column}.right{width:100%}}
+  /* tooltip for mission marker */
+  .marker-label{position:fixed;background:#000a;color:#fff;padding:6px 8px;border-radius:6px;font-size:13px;pointer-events:none;z-index:80}
+</style>
+</head>
+<body>
+<header>
+  <h1>Bahía del Pecado — DEMO</h1>
+  <nav>
+    <a href="#mundo">El Mundo</a>
+    <a href="#trailer">Tráiler</a>
+    <a href="#juego">Jugar</a>
+  </nav>
+</header>
+
+<div class="wrap">
+  <div class="left">
+    <div class="panel">
+      <h2>Juega ahora — Protótipo</h2>
+      <p class="hint">Controles: <strong>WASD / Flechas</strong> mover • <strong>Shift</strong> correr • <strong>E</strong> interactuar / entrar / salir • <strong>Space</strong> acción • <strong>M</strong> abrir mapa</p>
+      <canvas id="gameCanvas" width="1280" height="720"></canvas>
+      <p class="hint" style="margin-top:10px">Consejo: Acércate a un icono rojo (misión) y presiona <strong>E</strong> para iniciar. Monta la moto pulsando <strong>E</strong> junto a ella.</p>
+    </div>
+
+    <div class="panel" style="margin-top:12px;">
+      <h2>Misiones activas</h2>
+      <div id="missionsList">No hay misiones activas.</div>
+    </div>
+  </div>
+
+  <div class="right">
+    <div class="panel">
+      <h2>HUD</h2>
+      <div class="hud">
+        <div class="stat">Vida: <span id="life">100</span></div>
+        <div class="stat">Dinero: $<span id="money">1000</span></div>
+        <div class="stat">Respeto: <span id="rep">10</span></div>
+        <div class="stat">Misión: <span id="currentMission">Ninguna</span></div>
+      </div>
+
+      <h2 style="margin-top:16px">Mapa rápido</h2>
+      <p style="font-size:13px;color:#ccc">Marcadores: <strong style="color:#ff6b6b">Rojo</strong> = misión • <strong style="color:#4dff9a">Verde</strong> = vehiculo • <strong style="color:#ffd54d">Amarillo</strong> = tienda</p>
+      <div id="mini" style="width:100%;height:200px;background:#000;border-radius:8px;margin-top:8px;display:flex;align-items:center;justify-content:center;color:#666">Mini-mapa activo dentro del canvas</div>
+
+      <h2 style="margin-top:14px">Guardar / Cargar</h2>
+      <p style="font-size:13px;color:#ccc">El progreso se guarda automáticamente en tu navegador.</p>
+      <a class="btn" id="resetBtn">Reiniciar demo</a>
+    </div>
+
+    <div class="panel" style="margin-top:12px;">
+      <h2>Descripción rápida</h2>
+      <p style="color:#ddd;font-size:14px">Demo jugable: controla a Alex, completa misiones y conduce la MT-09 dorada. Este prototipo es la base para expandir el juego a Unity o Unreal.</p>
+      <p style="margin-top:10px"><strong>Versión:</strong> Demo Web v0.9</p>
+    </div>
+  </div>
+</div>
+
+<div id="markerTip" class="marker-label" style="display:none">Misión disponible - Presiona E</div>
+
+<footer>© 2025 Bahía del Pecado — Prototipo interactivo</footer>
+
+<script>
+/*
+  Bahía del Pecado — Demo Jugable (single-file)
+  - Player movement (walk/run)
+  - Vehicle enter/exit and driving (simple physics)
+  - NPC patrols
+  - Mission triggers and simple mission flow
+  - HUD and localStorage save
+  Note: This is a prototype for testing gameplay ideas. Swap images/models in production.
+*/
+
+// ----- Config -----
+const MAP_IMG = "https://upload.wikimedia.org/wikipedia/commons/thumb/5/56/Cartagena_de_Indias_City_Map.svg/1920px-Cartagena_de_Indias_City_Map.svg.png";
+// Canvas and ctx
+const canvas = document.getElementById("gameCanvas");
+const ctx = canvas.getContext("2d");
+canvas.style.backgroundImage = `url(${MAP_IMG})`;
+canvas.style.backgroundSize = "cover";
+
+// Game state
+let state = {
+  player: { x: 300, y: 300, speed: 2.6, runMultiplier:1.9, life:100, money:1000, respect:10, inVehicle:false },
+  vehicle: { x:420, y:320, vx:0, vy:0, angle:0, maxSpeed:6, handling:0.06, occupied:false },
+  npcs: [], // will hold simple NPCs
+  markers: [], // missions and interactables
+  currentMission: null,
+  keys: {},
+  time:0
+};
+
+// load save if exists
+const STORAGE_KEY = "barrio_de_fuego_demo_v1";
+function loadState(){
+  try{
+    const s = localStorage.getItem(STORAGE_KEY);
+    if(s){ const parsed = JSON.parse(s); state.player = parsed.player || state.player; state.player.inVehicle = false; state.vehicle = parsed.vehicle || state.vehicle; state.currentMission = parsed.currentMission || null; }
+  }catch(e){ console.warn("load fail",e) }
+}
+function saveState(){ localStorage.setItem(STORAGE_KEY, JSON.stringify({ player: state.player, vehicle: state.vehicle, currentMission: state.currentMission })); }
+loadState();
+
+// Helper: distance
+function dist(a,b){ return Math.hypot(a.x-b.x, a.y-b.y); }
+
+// Create some NPCs
+for(let i=0;i<6;i++){
+  state.npcs.push({
+    x: 150 + i*80,
+    y: 100 + (i%3)*120,
+    speed: 0.8 + Math.random()*0.8,
+    dir: Math.random()*Math.PI*2,
+    color: i%2? "#7fbfff":"#ff7f7f",
+    patrol: [ {x:150+i*70,y:100}, {x:150+i*70,y:300}, {x:350+i*70,y:300}, {x:350+i*70,y:100} ],
+    wpIndex: 0
+  });
+}
+
+// Markers (missions, vehicle, shops)
+// Add mission marker
+state.markers.push({ id:"m1", type:"mission", x:700, y:160, title:"La Bahía Sangrienta", active:true, description:"Recupera la moto robada del muelle." });
+// Add vehicle marker
+state.markers.push({ id:"v1", type:"vehicle", x:420, y:320, title:"MT-09 Dorada", active:true, description:"Tu moto disponible aquí." });
+// Add shop marker
+state.markers.push({ id:"s1", type:"shop", x:960, y:410, title:"Tienda del Barrio", active:true, description:"Compra mejoras y ropa." });
+
+// Input
+window.addEventListener("keydown",e=>{ state.keys[e.key.toLowerCase()] = true; });
+window.addEventListener("keyup",e=>{ state.keys[e.key.toLowerCase()] = false; });
+
+// Interaction distance
+const INTERACT_D = 34;
+
+// Update loop
+function update(dt){
+  state.time += dt;
+
+  const p = state.player;
+  // Movement (if not in vehicle)
+  if(!p.inVehicle){
+    let dx = 0, dy = 0;
+    if(state.keys["arrowup"]||state.keys["w"]) dy -= 1;
+    if(state.keys["arrowdown"]||state.keys["s"]) dy += 1;
+    if(state.keys["arrowleft"]||state.keys["a"]) dx -= 1;
+    if(state.keys["arrowright"]||state.keys["d"]) dx += 1;
+    const len = Math.hypot(dx,dy) || 1;
+    const running = state.keys["shift"];
+    const sp = p.speed * (running ? p.runMultiplier : 1);
+    p.x += (dx/len) * sp;
+    p.y += (dy/len) * sp;
+  } else {
+    // driving
+    const v = state.vehicle;
+    if(state.keys["arrowup"]||state.keys["w"]){ v.vx += Math.cos(v.angle) * 0.12; v.vy += Math.sin(v.angle) * 0.12; }
+    if(state.keys["arrowdown"]||state.keys["s"]){ v.vx *= 0.95; v.vy *= 0.95; }
+    if(state.keys["arrowleft"]||state.keys["a"]){ v.angle -= v.handling; }
+    if(state.keys["arrowright"]||state.keys["d"]){ v.angle += v.handling; }
+    // velocity cap
+    const mag = Math.hypot(v.vx,v.vy);
+    if(mag > v.maxSpeed){
+      v.vx = (v.vx/mag)*v.maxSpeed;
+      v.vy = (v.vy/mag)*v.maxSpeed;
+    }
+    v.x += v.vx;
+    v.y += v.vy;
+    // apply slight friction
+    v.vx *= 0.995; v.vy *= 0.995;
+    // update player position to vehicle
+    state.player.x = v.x; state.player.y = v.y;
+  }
+
+  // Simple world bounds
+  p.x = Math.max(16, Math.min(canvas.width-16, p.x));
+  p.y = Math.max(16, Math.min(canvas.height-16, p.y));
+  state.vehicle.x = Math.max(20, Math.min(canvas.width-20, state.vehicle.x));
+  state.vehicle.y = Math.max(20, Math.min(canvas.height-20, state.vehicle.y));
+
+  // NPC patrols
+  state.npcs.forEach(n=>{
+    const wp = n.patrol[n.wpIndex];
+    const dx = wp.x - n.x; const dy = wp.y - n.y;
+    if(Math.hypot(dx,dy) < 6){
+      n.wpIndex = (n.wpIndex+1) % n.patrol.length;
+    } else {
+      n.x += Math.sign(dx) * n.speed * 0.6;
+      n.y += Math.sign(dy) * n.speed * 0.6;
+    }
+  });
+
+  // Interaction: E key
+  if(state.keys["e"]){
+    handleInteract();
+    // prevent repeated triggers on holding
+    state.keys["e"] = false;
+  }
+
+  // simple mission logic
+  if(state.currentMission === "m1" && state.player && dist(state.player, {x:700,y:160}) < 28){
+    // mission complete action (example)
+    completeMission("m1");
+  }
+
+  // update HUD
+  document.getElementById("life").innerText = Math.max(0, Math.round(state.player.life));
+  document.getElementById("money").innerText = Math.round(state.player.money);
+  document.getElementById("rep").innerText = Math.round(state.player.respect);
+  document.getElementById("currentMission").innerText = state.currentMission || "Ninguna";
+
+  // autosave every 3 seconds (simple)
+  if(Math.floor(state.time) % 3 === 0) saveState();
+}
+
+// Handle interact (enter vehicle, start mission, shop)
+function handleInteract(){
+  const p = state.player;
+  // vehicle proximity
+  const v = state.vehicle;
+  if(!p.inVehicle && dist(p, v) < INTERACT_D){
+    enterVehicle();
+    return;
+  }
+  if(p.inVehicle){
+    exitVehicle();
+    return;
+  }
+  // check markers
+  for(const m of state.markers){
+    if(dist(p, m) < INTERACT_D){
+      if(m.type === "mission"){
+        startMission(m.id);
+        return;
+      } else if(m.type === "shop"){
+        // simple shop: buy +100 respect for 500$
+        if(p.money >= 500){ p.money -= 500; p.respect += 5; alert("Compraste respeto por $500."); } else alert("No tienes $500.");
+        return;
+      } else if(m.type === "vehicle"){
+        // teleport vehicle near player
+        state.vehicle.x = p.x + 30; state.vehicle.y = p.y + 12;
+        alert("La moto ha sido liberada cerca tuyo.");
+        return;
+      }
+    }
+  }
+}
+
+// Enter / Exit vehicle
+function enterVehicle(){
+  if(state.player.inVehicle) return;
+  state.player.inVehicle = true;
+  state.vehicle.occupied = true;
+  // align vehicle with player
+  state.vehicle.x = state.player.x;
+  state.vehicle.y = state.player.y;
+  state.vehicle.vx = 0; state.vehicle.vy = 0;
+  // small boost to simulate start
+  state.vehicle.vx = Math.cos(state.vehicle.angle) * 0.5;
+  state.vehicle.vy = Math.sin(state.vehicle.angle) * 0.5;
+}
+function exitVehicle(){
+  if(!state.player.inVehicle) return;
+  state.player.inVehicle = false;
+  state.vehicle.occupied = false;
+  // place player next to vehicle
+  state.player.x = state.vehicle.x + 24;
+  state.player.y = state.vehicle.y + 24;
+}
+
+// Mission flow
+function startMission(id){
+  const m = state.markers.find(x=>x.id===id);
+  if(!m) return;
+  state.currentMission = id;
+  document.getElementById("missionsList").innerHTML = `<div style="color:var(--gold);font-weight:700">${m.title}</div><div style="color:#ddd">${m.description}</div>`;
+  alert("Misión iniciada: " + m.title);
+}
+function completeMission(id){
+  if(state.currentMission !== id) return;
+  // reward
+  state.player.money += 700;
+  state.player.respect += 8;
+  alert("Misión completada. Recompensa: $700, +8 respeto.");
+  state.currentMission = null;
+  document.getElementById("missionsList").innerText = "No hay misiones activas.";
+  // deactivate marker
+  const m = state.markers.find(x=>x.id===id);
+  if(m) m.active = false;
+}
+
+// Draw
+function draw(){
+  // clear & background is CSS image
+  ctx.clearRect(0,0,canvas.width,canvas.height);
+
+  // draw markers (missions etc.)
+  for(const m of state.markers){
+    if(!m.active) continue;
+    ctx.beginPath();
+    if(m.type === "mission"){ ctx.fillStyle = "#ff6b6b"; ctx.arc(m.x, m.y, 10,0,Math.PI*2); }
+    else if(m.type === "vehicle"){ ctx.fillStyle = "#4dff9a"; ctx.rect(m.x-8,m.y-8,16,16) }
+    else if(m.type === "shop"){ ctx.fillStyle = "#ffd54d"; ctx.moveTo(m.x,m.y); ctx.arc(m.x,m.y,8,0,Math.PI*2); }
+    ctx.fill();
+    // label
+    ctx.font = "12px Arial";
+    ctx.fillStyle = "rgba(255,255,255,0.9)";
+    ctx.fillText(m.title, m.x + 12, m.y + 4);
+  }
+
+  // draw NPCs
+  state.npcs.forEach(n=>{
+    ctx.fillStyle = n.color;
+    ctx.beginPath(); ctx.arc(n.x, n.y, 10, 0, Math.PI*2); ctx.fill();
+  });
+
+  // draw vehicle (simple)
+  const v = state.vehicle;
+  // rotate draw
+  ctx.save();
+  ctx.translate(v.x, v.y);
+  ctx.rotate(v.angle);
+  ctx.fillStyle = "#d4af37";
+  ctx.fillRect(-20,-10,40,20);
+  ctx.restore();
+
+  // draw player
+  const p = state.player;
+  ctx.fillStyle = "#ffb400";
+  ctx.beginPath();
+  ctx.arc(p.x, p.y, 12,0,Math.PI*2);
+  ctx.fill();
+  // face direction indicator
+  ctx.fillStyle = "#000";
+  ctx.fillRect(p.x-4, p.y-4, 8,3);
+  // name
+  ctx.font = "12px Arial";
+  ctx.fillStyle = "#fff";
+  ctx.fillText("Alex Vega (JAL)", p.x - 36, p.y - 20);
+
+  // mini crosshair center
+  ctx.strokeStyle = "rgba(255,255,255,0.06)";
+  ctx.beginPath(); ctx.moveTo(canvas.width/2 - 8, canvas.height/2); ctx.lineTo(canvas.width/2 + 8, canvas.height/2); ctx.stroke();
+}
+
+// Mouse hover tooltip for markers
+const markerTip = document.getElementById("markerTip");
+canvas.addEventListener("mousemove", (ev)=>{
+  const rect = canvas.getBoundingClientRect();
+  const mx = ev.clientX - rect.left;
+  const my = ev.clientY - rect.top;
+  let over = null;
+  for(const m of state.markers){ if(m.active && Math.hypot(mx-m.x,my-m.y) < 14){ over = m; break; } }
+  if(over){
+    markerTip.style.left = (ev.clientX + 14) + "px";
+    markerTip.style.top = (ev.clientY + 14) + "px";
+    markerTip.innerText = `${over.title} — Presiona E`;
+    markerTip.style.display = "block";
+  } else markerTip.style.display = "none";
+});
+
+// Reset demo
+document.getElementById("resetBtn").addEventListener("click", ()=>{
+  if(confirm("Reiniciar progreso de demo?")){ localStorage.removeItem(STORAGE_KEY); location.reload(); }
+});
+
+// Game loop
+let last = performance.now();
+function loop(now){
+  const dt = (now - last) / 1000;
+  last = now;
+  update(dt);
+  draw();
+  requestAnimationFrame(loop);
+}
+requestAnimationFrame(loop);
+
+// small UI save feedback
+setInterval(()=>saveState(), 2500);
+
+</script>
+</body>
+</html>
 <!DOCTYPE html>
 <html lang="es">
 <head>
